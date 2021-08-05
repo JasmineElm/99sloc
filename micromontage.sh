@@ -27,7 +27,7 @@ HEREDOC
 
 _rand() {
   start=$1; step=$2; end=$3
-  seq $start $step $end | shuf -n1
+  seq "$start" "$step" "$end" | shuf -n1
 }
 
 _max_grain_length() {
@@ -35,15 +35,11 @@ _max_grain_length() {
   local input_length=$2; local grain_length=$1
   [[ $(echo "$grain_length < $input_length" | bc) -eq 1 ]] ||
     grain_length=$(echo "$input_length * .9" | bc)
-  echo $grain_length
+  echo "$grain_length"
 }
 
 _grain_length() {
   _rand $_min_grain_len $_resolution $_max_grain_len 
-}
-
-_tidy() {
-  rm -rf .tmp
 }
 
 _binary_exists() { 
@@ -54,31 +50,24 @@ _binary_exists() {
   fi
 }
 
-_setup() {
-  _tidy
-  for i in "${_binaries[@]}"; do
-    _binary_exists "$i"
-  done
-  mkdir -p .tmp
-}
-
 _file_len_in_ms() {
   soxi -D $1
 }
 
 _grain_start() {
   #file_len=$1; grain_len=$2
-  _rand $_resolution $_resolution $(echo "scale=3; $1 - $2" | bc)
+  _rand $_resolution $_resolution "$(echo "scale=3; $1 - $2" | bc)"
 }
 
 ###  MAIN         ###########################################
+source library.sh # library functions
 _setup
 ##test switches passed
 if [[ -f "${1-}" ]]; then
   inFile="$1"
   inLen=$(_file_len_in_ms "$inFile")
-  _max_grain_len=$(_max_grain_length $_max_grain_len $inLen)
-  echo $_max_grain_len $inLen
+  _max_grain_len=$(_max_grain_length $_max_grain_len "$inLen")
+  echo "$_max_grain_len" "$inLen"
 else
   _print_help && exit 1
 fi
@@ -90,7 +79,7 @@ fi
 while (($(echo "$_current_duration < $duration" | bc -l))); do
   tmp_file=".tmp/$_slice.wav"
   trim_length=$(_grain_length)
-  echo "trim_length="$trim_length ";inLen="$inLen
+  echo "trim_length=""$trim_length" ";inLen=""$inLen"
   trim_start=$(_grain_start "$inLen" "$trim_length")
   echo "sox" "$inFile" "$tmp_file" "start" "$trim_start" "len:""$trim_length"
   sox "$inFile" "$tmp_file" trim "$trim_start" "$trim_length"
@@ -99,4 +88,4 @@ while (($(echo "$_current_duration < $duration" | bc -l))); do
   _current_duration=$(echo "scale=3; $_current_duration + $trim_length" | bc)
 done
 
-sox .tmp/*.wav output.wav && _tidy
+sox .tmp/*.wav $outFile && _tidy
