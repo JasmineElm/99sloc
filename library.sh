@@ -68,7 +68,25 @@ _rand_float(){
 _rand_string(){
     local DEFAULT_LENGTH=12;
     local LENGTH=${1:-$DEFAULT_LENGTH};
-    (tr -dc "[:alnum:]" < /dev/urandom || true) | head -c "$LENGTH" 
+    local mode=${2:-a}
+    case $mode in
+      l) filter='"[:alpha:]"';;
+      n) filter='"[:digit:]"';;
+      g) filter='"[:graph:]"';;
+      *) filter='"[:alnum:]"';;
+    esac
+    (tr -dc "$filter" < /dev/urandom || true) | head -c "$LENGTH"
+}
+
+_pseudo_word(){
+  local length=${1:-8}
+  local prefix; prefix=$(shuf -n 1 ./resources/prefixes)
+  local suffix; suffix=$(shuf -n 1 ./resources/suffixes)
+  local rand_str_len=$((length-(${#prefix}+${#suffix})))
+  [[ $rand_str_len  -gt 1 ]] || rand_str_len=1   
+  local rand_string;  rand_string=$(_rand_string 1 1 $rand_str_len)
+  echo "$prefix$rand_string$suffix"
+
 }
 
 _dec_to_hex() {
