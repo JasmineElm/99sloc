@@ -9,13 +9,16 @@ IFS=$' \n\t'
 # Source functions rather than run this script direct
 
 
-###  VARIABLES    ###########################################
+###  VARIABLES    ##########################################
 
 ##!! VARIABLES SET HERE EFFECT _ALL SCRIPTS_
 
 _default_format='wav'
 _binaries=()
-###  FUNCTIONS    ###########################################
+###  FUNCTIONS    ##########################################
+
+###################################################### SETUP
+
 _binary_exists() {
   type "$1" &> /dev/null ||  echo "$1" not found, exiting... 
 }
@@ -24,10 +27,6 @@ _tidy() {
   rm -rf .tmp
 }
 
-_rand_int() {
-  start=$1; step=$2; end=$3
-  seq "$start" "$step" "$end" | shuf -n1
-}
 
 _setup() {
   # each script has its' own $_binaries array
@@ -37,6 +36,8 @@ _setup() {
   done
   mkdir -p .tmp
 }
+
+######################################################## SOX
 
 _is_valid_format() {
   # is our file format one that sox can handle?
@@ -61,8 +62,23 @@ _format_check(){
  echo "$filename"
 } 
 
+##################################################### RANDOM
+
+_rand_int() {
+  start=$1; step=$2; end=$3
+  seq "$start" "$step" "$end" | shuf -n1
+}
+
 _rand_float(){
   printf '%.2f\n' "$(printf '0x0.%04xp1' $RANDOM)"
+}
+
+_cointoss() {
+  local bias=${2:-0.5} #how biased is the coin?
+  local flip; flip=$(_rand_float)
+  local outcome=false
+  (( $(echo "$flip > $bias" |bc -l) )) || outcome=true
+  echo "$outcome"
 }
 
 _rand_string(){
@@ -88,6 +104,8 @@ _pseudo_word(){
   echo "$prefix$rand_string$suffix"
 
 }
+
+#################################################### HELPERS
 
 _dec_to_hex() {
   printf '%02x\n' "$1"
