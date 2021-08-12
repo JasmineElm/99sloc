@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+
+set -u -e -o errtrace -o pipefail
+trap "echo ""errexit: line $LINENO. Exit code: $?"" >&2" ERR
+IFS=$'\n\t'
+
+source library.sh # library functions
+###  VARIABLES    ###########################################
+
+THIS_SCRIPT="$(basename "${0}")" # this script
+DEFAULT_OUTPUT="output.wav"      # name of the output
+IN_FILE=''
+OUT_FILE=''
+DEFAULT_DURATION=6               # how long will the time be?
+BINARIES=(soxi shuf bc)          # binaries required
+RESOLUTION=0.001                 # time precision
+MIN_GRAIN_LEN=0.001              # mininum grain length
+MAX_GRAIN_LEN=0.05               # maximum grain length
+SAMPLE_RATE=44100
+CHANNELS=2
+DENSITY=0.8
+
+###  FUNCTIONS    ###########################################
+_print_help() {
+  cat <<HEREDOC
+stitch a soundfile together in a different way
+
+Usage:
+  ${THIS_SCRIPT} <input file> [<length in seconds>] [<density>] [<output file>]
+e.g. ${THIS_SCRIPT} in.wav 6 0.8 out.wav
+HEREDOC
+}
+
+set_max_grain_length() {
+  # Max grain len can't be > than the length of infile
+  local input_length=$2
+  local grain_length=$1
+  [[ $(echo "$grain_length < $input_length" | bc) -eq 1 ]] \
+    || grain_length=$(echo "$input_length * .9" | bc)
+  echo "$grain_length"
+}
+
+grain_length() {
+  lib::rand_int $MIN_GRAIN_LEN $RESOLUTION $MAX_GRAIN_LEN
+}
+
+generate_silent_file() {
+  local OUT_FILE=${1-}
+  local length=${2:-0.5} #
+  sox -n -r "$SAMPLE_RATE" -c "$CHANNELS" "$OUT_FILE" trim 0.0 "$length"
+}
+
+grain_start() {
+  #file_len=$1; grain_len=$2
+  lib::rand_int $RESOLUTION $RESOLUTION "$(echo "scale=3; $1 - $2" | bc)"
+}
+
+###  MAIN         ###########################################
+lib::setup
+
+# Parse arguments
+# arg 1 = file, must exist
+if [[ -f "${1-}" ]]; then
+  IN_FILE="$1"
+  IN_LENGTH=$(soxi -D "$IN_FILE")
+  MAX_GRAIN_LEN=$(set_max_grain_length $MAX_GRAIN_LEN "$IN_LENGTH")
+  SAMPLE_RATE=$(soxi -r "$IN_FILE")
+  CHANNELS=$(soxi -c "$IN_FILE")
+else
+  _print_help && exit 1
+fi
+
+# arg 2 = duration in seconds  must be an int, or $DEFAULT_DURATION
+[[ "${2-}" =~ ^[0-9]+$ ]] && duration=$3 || duration="$DEFAULT_DURATION"
+
+## arg 3 = density, float between 0..1
+DENSITY=${3:-$DENSITY}
+## arg 4 = output file, must be format that sox can handle
+OUT_FILE=${4:-$DEFAULT_OUTPUT}            # value passed, or default
+OUT_FILE=$(lib::format_check "$OUT_FILE") # with an ext that sox can parse
+
+slice=0            # used in while loop
+current_duration=0 # used in while loop
+while (($(echo "$current_duration < $duration" | bc -l))); do
+  tmp_file=".tmp/$slice.wav"
+  trim_length=$(grain_length)
+  trim_start=$(grain_start "$IN_LENGTH" "$trim_length")
+  if [[ $(lib::cointoss "$DENSITY") = 'true' ]]; then
+    sox "$IN_FILE" "$tmp_file" trim "$trim_start" "$trim_length"
+  else
+    generate_silent_file "$tmp_file" "$trim_length"
+  fi
+  slice=$((slice + 1))
+  current_duration=$(echo "scale=3; $current_duration + $trim_length" | bc)
+done
+
+sox .tmp/*.wav "$OUT_FILE" && lib::tidy

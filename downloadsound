@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+set -u -e -o errtrace -o pipefail
+trap "echo ""errexit: line $LINENO. Exit code: $?"" >&2" ERR
+IFS=$'\n\t'
+
+###  VARIABLES    ###########################################
+
+THIS_SCRIPT="$(basename "${0}")" # this script
+DEFAULT_OUTPUT="output.wav"      # name of the output
+BINARIES=(youtube-dl)            # binaries required
+MAX_LEN_MINS=5                   # don't download anything longer than
+OUT_FILE=''                      # Script writes to this
+
+###  FUNCTIONS    ###########################################
+
+print_help() {
+  cat <<HEREDOC
+Simply download the audio from a given youtube video.
+pass no arguments, and get a random audio
+
+Usage:
+${THIS_SCRIPT} [<video url>] [<output file>]
+HEREDOC
+}
+
+lib::random_word() {
+  #random word for youtube search
+  shuf -n 1 /usr/share/dict/words
+}
+
+get_video_url() {
+  # search YT using our search term
+  youtube-dl ytsearch:\""$1"\" --get-id
+}
+
+get_video_length() {
+  #get the video length
+  local length
+  length=$(youtube-dl "$1" --get-duration)
+  # convert from HH:MM:SS to a simple MM int
+  colon_count=$(awk -F: '{print NF-1}' <<<"$length")
+  if [[ "$colon_count" -ne 1 ]]; then #we have HH in there
+    length="hours"
+  else
+    length=$($length | cut -d: -f1) #pattern to remove ":SS"
+  fi
+  echo "$length"
+}
+
+is_too_long() {
+  local in_len
+  local max_len
+  local ret_val
+  in_len=$1
+  max_len=$2
+  ret_val=false
+  if [[ "$in_len" = "hours" ]] && [[ $in_len > $max_len ]]; then
+    ret_val=true
+  fi
+  echo "$ret_val"
+}
+
+get_random_url() {
+  local URL
+  local search_term
+  local len
+  local too_long
+  too_long="true"
+  while [[ "$too_long" = "true" ]]; do
+    search_term=$(lib::random_word)
+    URL=$(get_video_url "$search_term")
+    len=$(get_video_length "$URL")
+    too_long=$(is_too_long "$len" "$MAX_LEN_MINS")
+  done
+  echo "$URL"
+}
+
+###  MAIN         ###########################################
+source ./library.sh
+
+lib::setup
+# Parse arguments
+[[ -z ${1-} ]] && URL="$(get_random_url)" || URL="$1"
+[[ -n ${2-} ]] && OUT_FILE="$2" || OUT_FILE="$DEFAULT_OUTPUT"
+
+echo "$URL" "$OUT_FILE"
+youtube-dl "$URL" --extract-audio --audio-format wav --output "$OUT_FILE"
