@@ -11,24 +11,13 @@ DEFAULT_OUTPUT="output.wav"      # name of the output
 BINARIES=(youtube-dl)            # binaries required
 MAX_LEN_MINS=5                   # don't download anything longer than
 OUT_FILE=''                      # Script writes to this
-
-###  FUNCTIONS    ###########################################
-
-print_help() {
-  cat <<HEREDOC
-Simply download the audio from a given youtube video.
+HELP_TEXT="Simply download the audio from a given youtube video.
 pass no arguments, and get a random audio
 
 Usage:
-${THIS_SCRIPT} [<video url>] [<output file>]
-HEREDOC
-}
+${THIS_SCRIPT} [<video url>] [<output file>]"
 
-lib::random_word() {
-  #random word for youtube search
-  shuf -n 1 /usr/share/dict/words
-}
-
+###  FUNCTIONS    ###########################################
 get_video_url() {
   # search YT using our search term
   youtube-dl ytsearch:\""$1"\" --get-id
@@ -62,18 +51,18 @@ is_too_long() {
 }
 
 get_random_url() {
-  local URL
+  local url
   local search_term
   local len
   local too_long
   too_long="true"
   while [[ "$too_long" = "true" ]]; do
     search_term=$(lib::random_word)
-    URL=$(get_video_url "$search_term")
-    len=$(get_video_length "$URL")
+    url=$(get_video_url "$search_term")
+    len=$(get_video_length "$url")
     too_long=$(is_too_long "$len" "$MAX_LEN_MINS")
   done
-  echo "$URL"
+  echo "$url"
 }
 
 ###  MAIN         ###########################################
@@ -81,8 +70,11 @@ source ./library.sh
 
 lib::setup
 # Parse arguments
-[[ -z ${1-} ]] && URL="$(get_random_url)" || URL="$1"
+if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+  lib::print_and_exit "$HELP_TEXT"
+fi
+[[ -z ${1-} ]] && url="$(get_random_url)" || url="$1"
 [[ -n ${2-} ]] && OUT_FILE="$2" || OUT_FILE="$DEFAULT_OUTPUT"
 
-echo "$URL" "$OUT_FILE"
-youtube-dl "$URL" --extract-audio --audio-format wav --output "$OUT_FILE"
+echo "$url" "$OUT_FILE"
+youtube-dl ytsearch:"$url" --extract-audio --audio-format wav --output "$OUT_FILE"

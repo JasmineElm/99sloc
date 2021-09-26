@@ -5,31 +5,25 @@ trap "echo ""errexit: line $LINENO. Exit code: $?"" >&2" ERR
 IFS=$'\n\t'
 
 source library.sh # library functions
-###  VARIABLES    ###########################################
+###  VARIABLES    #############################################################
 
 THIS_SCRIPT="$(basename "${0}")" # this script
 DEFAULT_OUTPUT="output.wav"      # name of the output
 IN_FILE=''
 OUT_FILE=''
-DEFAULT_DURATION=6               # how long will the time be?
-BINARIES=(soxi shuf bc)          # binaries required
-RESOLUTION=0.001                 # time precision
-MIN_GRAIN_LEN=0.001              # mininum grain length
-MAX_GRAIN_LEN=0.05               # maximum grain length
+DEFAULT_DURATION=6      # how long will the time be?
+BINARIES=(soxi shuf bc) # binaries required
+RESOLUTION=0.001        # time precision
+MIN_GRAIN_LEN=0.001     # mininum grain length
+MAX_GRAIN_LEN=0.05      # maximum grain length
 SAMPLE_RATE=44100
 CHANNELS=2
 DENSITY=0.8
-
-###  FUNCTIONS    ###########################################
-_print_help() {
-  cat <<HEREDOC
-stitch a soundfile together in a different way
-
-Usage:
-  ${THIS_SCRIPT} <input file> [<length in seconds>] [<density>] [<output file>]
-e.g. ${THIS_SCRIPT} in.wav 6 0.8 out.wav
-HEREDOC
-}
+HELP_TEXT="stitch a soundfile together in a different way 
+Usage: 
+  ${THIS_SCRIPT} <input file> [<length in seconds>] [<density>] [<output file>] 
+  e.g. ${THIS_SCRIPT} in.wav 6 0.8 out.wav"
+###  FUNCTIONS    #############################################################
 
 set_max_grain_length() {
   # Max grain len can't be > than the length of infile
@@ -55,43 +49,56 @@ grain_start() {
   lib::rand_int $RESOLUTION $RESOLUTION "$(echo "scale=3; $1 - $2" | bc)"
 }
 
-###  MAIN         ###########################################
-lib::setup
 
-# Parse arguments
-# arg 1 = file, must exist
-if [[ -f "${1-}" ]]; then
-  IN_FILE="$1"
-  IN_LENGTH=$(soxi -D "$IN_FILE")
-  MAX_GRAIN_LEN=$(set_max_grain_length $MAX_GRAIN_LEN "$IN_LENGTH")
-  SAMPLE_RATE=$(soxi -r "$IN_FILE")
-  CHANNELS=$(soxi -c "$IN_FILE")
-else
-  _print_help && exit 1
-fi
+move_grain() {
+  # pitch, pan, stretch
+  local in_grain=${1-}
 
-# arg 2 = duration in seconds  must be an int, or $DEFAULT_DURATION
-[[ "${2-}" =~ ^[0-9]+$ ]] && duration=$3 || duration="$DEFAULT_DURATION"
+}
+parse_options() {
+  [[ $# -eq 0 ]] && lib::print_and_exit "$HELP_TEXT" # no arg = help text
 
-## arg 3 = density, float between 0..1
-DENSITY=${3:-$DENSITY}
-## arg 4 = output file, must be format that sox can handle
-OUT_FILE=${4:-$DEFAULT_OUTPUT}            # value passed, or default
-OUT_FILE=$(lib::format_check "$OUT_FILE") # with an ext that sox can parse
-
-slice=0            # used in while loop
-current_duration=0 # used in while loop
-while (($(echo "$current_duration < $duration" | bc -l))); do
-  tmp_file=".tmp/$slice.wav"
-  trim_length=$(grain_length)
-  trim_start=$(grain_start "$IN_LENGTH" "$trim_length")
-  if [[ $(lib::cointoss "$DENSITY") = 'true' ]]; then
-    sox "$IN_FILE" "$tmp_file" trim "$trim_start" "$trim_length"
+  # arg 1 = file, must exist
+  if [[ -f "${1-}" ]]; then
+    IN_FILE=$(lib::format_check "$1") # with an ext that sox can parse
+    IN_LENGTH=$(soxi -D "$IN_FILE")
+    MAX_GRAIN_LEN=$(set_max_grain_length $MAX_GRAIN_LEN "$IN_LENGTH")
+    SAMPLE_RATE=$(soxi -r "$IN_FILE")
+    CHANNELS=$(soxi -c "$IN_FILE")
   else
-    generate_silent_file "$tmp_file" "$trim_length"
+    lib::print_and_exit "$HELP_TEXT"
   fi
-  slice=$((slice + 1))
-  current_duration=$(echo "scale=3; $current_duration + $trim_length" | bc)
-done
 
-sox .tmp/*.wav "$OUT_FILE" && lib::tidy
+  # arg 2 = duration in seconds  must be an int, or $DEFAULT_DURATION
+  [[ "${2-}" =~ ^[0-9]+$ ]] && duration=$3 || duration="$DEFAULT_DURATION"
+
+  DENSITY=${3:-$DENSITY} # arg 3 = density, float between 0..1
+  ## arg 4 = output file, must be format that sox can handle
+  OUT_FILE=${4:-$DEFAULT_OUTPUT} # value passed, or default
+  echo "I got here..."
+  OUT_FILE=$(lib::format_check "$OUT_FILE") # with an ext that sox can parse
+}
+
+build_micromontage() {
+  slice=0
+  current_duration=0
+  while (($(echo "$current_duration < $duration" | bc -l))); do
+    tmp_file=".tmp/$slice.wav"
+    trim_length=$(grain_length)
+    trim_start=$(grain_start "$IN_LENGTH" "$trim_length")
+    if [[ $(lib::cointoss "$DENSITY") = 'true' ]]; then
+      sox "$IN_FILE" "$tmp_file" trim "$trim_start" "$trim_length"
+    else
+      generate_silent_file "$tmp_file" "$trim_length"
+    fi
+    slice=$((slice + 1))
+    current_duration=$(echo "scale=3; $current_duration + $trim_length" | bc)
+  done
+  sox .tmp/*.wav "$OUT_FILE"
+}
+
+###  MAIN         #############################################################
+lib::setup
+parse_options "$@"
+build_micromontage
+lib::tidy
