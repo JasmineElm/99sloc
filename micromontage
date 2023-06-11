@@ -1,28 +1,19 @@
 #!/usr/bin/env bash
 
-set -u -e -o errtrace -o pipefail
-trap "echo ""errexit: line $LINENO. Exit code: $?"" >&2" ERR
-IFS=$'\n\t'
+# shellcheck disable=SC1091
+source ./library.sh # library functions
+source ./99slocrc   # configuration file for 99sloc scripts
 
-source library.sh # library functions
 ###  VARIABLES    #############################################################
 
+# SET MORE VARIABLES VIA 99slocrc IN THIS DIRECTORY
 THIS_SCRIPT="$(basename "${0}")" # this script
-DEFAULT_OUTPUT="output.wav"      # name of the output
-IN_FILE=''
-OUT_FILE=''
-DEFAULT_DURATION=6      # how long will the time be?
-BINARIES=(soxi shuf bc) # binaries required
-RESOLUTION=0.001        # time precision
-MIN_GRAIN_LEN=0.001     # mininum grain length
-MAX_GRAIN_LEN=0.05      # maximum grain length
-SAMPLE_RATE=44100
-CHANNELS=2
-DENSITY=0.8
+
 HELP_TEXT="stitch a soundfile together in a different way 
 Usage: 
   ${THIS_SCRIPT} <input file> [<length in seconds>] [<density>] [<output file>] 
   e.g. ${THIS_SCRIPT} in.wav 6 0.8 out.wav"
+
 ###  FUNCTIONS    #############################################################
 
 set_max_grain_length() {
@@ -35,66 +26,66 @@ set_max_grain_length() {
 }
 
 grain_length() {
-  lib::rand_int $MIN_GRAIN_LEN $RESOLUTION $MAX_GRAIN_LEN
-}
-
-generate_silent_file() {
-  local OUT_FILE=${1-}
-  local length=${2:-0.5} #
-  sox -n -r "$SAMPLE_RATE" -c "$CHANNELS" "$OUT_FILE" trim 0.0 "$length"
+  #measured in samples, passed values should be integers
+  local min_grain_len=${1:-}
+  local max_grain_len=${2:-}
+  lib::rand_int "$min_grain_len" 1 "$max_grain_len"
 }
 
 grain_start() {
   #file_len=$1; grain_len=$2
-  lib::rand_int $RESOLUTION $RESOLUTION "$(echo "scale=3; $1 - $2" | bc)"
+  local file_len=${1:-}
+  local grain_len=${2:-}
+  lib::rand_int 0 "$grain_len" "$((file_len - grain_len))"
 }
 
-
-move_grain() {
-  # pitch, pan, stretch
-  local in_grain=${1-}
-
-}
 parse_options() {
   [[ $# -eq 0 ]] && lib::print_and_exit "$HELP_TEXT" # no arg = help text
-
   # arg 1 = file, must exist
-  if [[ -f "${1-}" ]]; then
+  if [[ -f "$1" ]]; then
     IN_FILE=$(lib::format_check "$1") # with an ext that sox can parse
-    IN_LENGTH=$(soxi -D "$IN_FILE")
-    MAX_GRAIN_LEN=$(set_max_grain_length $MAX_GRAIN_LEN "$IN_LENGTH")
-    SAMPLE_RATE=$(soxi -r "$IN_FILE")
-    CHANNELS=$(soxi -c "$IN_FILE")
+    SAMPLE_RATE=$(sox::get_sample_rate "$IN_FILE")
+    CHANNELS=$(sox::get_channels "$IN_FILE")
+    IN_LEN=$(sox::get_length "$IN_FILE")
+    MIN_GRAIN_LEN="$(util::get_duration_in_samples "$MIN_GRAIN_LEN" "$SAMPLE_RATE")"
+    MAX_GRAIN_LEN="$(util::get_duration_in_samples "$MAX_GRAIN_LEN" "$SAMPLE_RATE")"
+
   else
     lib::print_and_exit "$HELP_TEXT"
   fi
-
-  # arg 2 = duration in seconds  must be an int, or $DEFAULT_DURATION
-  [[ "${2-}" =~ ^[0-9]+$ ]] && duration=$3 || duration="$DEFAULT_DURATION"
+  # arg 2 = duration in seconds must be an int, or $DEFAULT_DURATION
+  [[ "${2-}" =~ ^[0-9]+$ ]] && DURATION=$2 || DURATION="$DEFAULT_DURATION"
+  DURATION="$(util::get_duration_in_samples "$DURATION" "$SAMPLE_RATE")"
 
   DENSITY=${3:-$DENSITY} # arg 3 = density, float between 0..1
+
   ## arg 4 = output file, must be format that sox can handle
-  OUT_FILE=${4:-$DEFAULT_OUTPUT} # value passed, or default
-  echo "I got here..."
+  OUT_FILE=${4:-$DEFAULT_OUTPUT}            # value passed, or default
   OUT_FILE=$(lib::format_check "$OUT_FILE") # with an ext that sox can parse
+  util::generate_silent_file "$OUT_FILE" "$SAMPLE_RATE" "$CHANNELS" 0s
 }
 
 build_micromontage() {
   slice=0
   current_duration=0
-  while (($(echo "$current_duration < $duration" | bc -l))); do
+
+  while [[ $current_duration -lt $DURATION ]]; do
+    # echo "current duration: $current_duration"
     tmp_file=".tmp/$slice.wav"
-    trim_length=$(grain_length)
-    trim_start=$(grain_start "$IN_LENGTH" "$trim_length")
+    trim_length=$(grain_length "$MIN_GRAIN_LEN" "$MAX_GRAIN_LEN")
+    trim_start=$(grain_start "$IN_LEN" "$trim_length")
     if [[ $(lib::cointoss "$DENSITY") = 'true' ]]; then
-      sox "$IN_FILE" "$tmp_file" trim "$trim_start" "$trim_length"
+      sox "$IN_FILE" "$tmp_file" trim "$trim_start"s "$trim_length"s
     else
-      generate_silent_file "$tmp_file" "$trim_length"
+      util::generate_silent_file "$tmp_file" "$SAMPLE_RATE" "$CHANNELS" "$trim_length"s
     fi
+    sox::append_file "$OUT_FILE" "$tmp_file"
+    rm "$tmp_file"
     slice=$((slice + 1))
-    current_duration=$(echo "scale=3; $current_duration + $trim_length" | bc)
+    current_duration=$(sox::get_length "$OUT_FILE")
+    echo current duration: "$(bc <<<"scale=3; $current_duration / $SAMPLE_RATE")"
   done
-  sox .tmp/*.wav "$OUT_FILE"
+  util::trim_to_length "$OUT_FILE" "$DURATION"
 }
 
 ###  MAIN         #############################################################

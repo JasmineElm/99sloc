@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
 
-set -u -e -o errtrace -o pipefail
-trap "echo ""errexit: line $LINENO. Exit code: $?"" >&2" ERR
-IFS=$'\n\t'
+# shellcheck disable=SC1091
+source ./library.sh # library functions
+source ./99slocrc   # configuration file for 99sloc scripts
 
 ###  VARIABLES    ###########################################
 
 THIS_SCRIPT="$(basename "${0}")" # this script
-DEFAULT_OUTPUT="output.wav"      # name of the output
-BINARIES=(youtube-dl)            # binaries required
-MAX_LEN_MINS=5                   # don't download anything longer than
-OUT_FILE=''                      # Script writes to this
 HELP_TEXT="Simply download the audio from a given youtube video.
 pass no arguments, and get a random audio
 
@@ -60,21 +56,22 @@ get_random_url() {
     search_term=$(lib::random_word)
     url=$(get_video_url "$search_term")
     len=$(get_video_length "$url")
-    too_long=$(is_too_long "$len" "$MAX_LEN_MINS")
+    too_long=$(is_too_long "$len" "$DLS_MAX_LEN_MINS")
   done
   echo "$url"
 }
 
 ###  MAIN         ###########################################
-source ./library.sh
-
+BINARIES=$DLS_BINARIES
 lib::setup
 # Parse arguments
+[[ -z ${1-} ]] && url="$(get_random_url)" || url="$1"
+echo "$1"
 if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
   lib::print_and_exit "$HELP_TEXT"
 fi
-[[ -z ${1-} ]] && url="$(get_random_url)" || url="$1"
-[[ -n ${2-} ]] && OUT_FILE="$2" || OUT_FILE="$DEFAULT_OUTPUT"
+
+[[ -n ${2-} ]] && OUT_FILE="$2" || OUT_FILE="$DLS_DEFAULT_OUTPUT"
 
 echo "$url" "$OUT_FILE"
 youtube-dl ytsearch:"$url" --extract-audio --audio-format wav --output "$OUT_FILE"
