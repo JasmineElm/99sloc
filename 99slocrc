@@ -20,6 +20,7 @@ export DLS_DEFAULT_OUTPUT="$DEFAULT_OUTPUT" # name of the output
 # ##########################################################
 # MICROMONTAGE
 
+<<<<<<< HEAD
 export MM_BINARIES=(ffmpeg)                 # binaries required
 export MM_DEFAULT_OUTPUT="$DEFAULT_OUTPUT"  # name of the output
 export MM_DEFAULT_DURATION=6                # how long will the time be (in seconds)?
@@ -27,3 +28,12 @@ export MM_BINARIES=(soxi shuf bc)           # binaries required
 export MM_MIN_GRAIN_LEN=0.01                # mininum grain length (in seconds)
 export MM_MAX_GRAIN_LEN=0.05                # maximum grain length (in seconds)
 export MM_DENSITY=0.8                       # silence Vs grains. 0.0=silence, 1.0=grain
+=======
+export MM_BINARIES=(ffmpeg)                # binaries required
+export MM_DEFAULT_OUTPUT="$DEFAULT_OUTPUT" # name of the output
+export MM_DEFAULT_DURATION=6               # how long will the time be (in seconds)?
+export MM_BINARIES=(soxi shuf bc)          # binaries required
+export MM_MIN_GRAIN_LEN=0.01               # mininum grain length (in seconds)
+export MM_MAX_GRAIN_LEN=0.05               # maximum grain length (in seconds)
+export MM_DENSITY=0.8                      # silence Vs grains. 0.0=silence, 1.0=grain
+>>>>>>> 61b491459848ea17b48d09d7df6ddabdc6e2e338

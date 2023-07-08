@@ -350,8 +350,8 @@ util::one_range_to_another() {
 
 util::file_exists() {
   local file=${1:-}
-  [[ -f "$file" ]] && echo "$file" ||
-    echo lib::print_and_exit "file $file does not exist"
+  [[ -f "$file" ]] && echo "$file" \
+    || echo lib::print_and_exit "file $file does not exist"
 }
 
 util::tmp_file() {

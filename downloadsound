@@ -63,11 +63,11 @@ get_random_url() {
 
 ###  MAIN         ###########################################
 BINARIES=$DLS_BINARIES
-lib::setup 
+lib::setup
 # Parse arguments
 [[ -z ${1-} ]] && url="$(get_random_url)" || url="$1"
 echo "$1"
-if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]] ; then
+if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
   lib::print_and_exit "$HELP_TEXT"
 fi
 
@@ -75,5 +75,3 @@ fi
 
 echo "$url" "$OUT_FILE"
 youtube-dl ytsearch:"$url" --extract-audio --audio-format wav --output "$OUT_FILE"
-
-
