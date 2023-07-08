@@ -1,0 +1,29 @@
+#!/bin/env bash
+
+# configuration file for 99sloc scripts
+
+# ##########################################################
+# BASIC SETTINGS
+
+## VARIABLES SET HERE EFFECT _ALL SCRIPTS_
+export SOX_OPTS="-V2 -G --magic --multi-threaded --temp .tmp/"
+export SOX_FORMAT_ERROR=" doesn't appear to be something sox can handle. exiting"
+export DEFAULT_OUTPUT="output.wav"
+
+# ##########################################################
+# DOWNLOADSOUND
+
+export DLS_BINARIES=(youtube-dl ffmpeg)     # binaries required
+export DLS_MAX_LEN_MINS=5                   # don't download anything longer than this
+export DLS_DEFAULT_OUTPUT="$DEFAULT_OUTPUT" # name of the output
+
+# ##########################################################
+# MICROMONTAGE
+
+export MM_BINARIES=(ffmpeg)                 # binaries required
+export MM_DEFAULT_OUTPUT="$DEFAULT_OUTPUT"  # name of the output
+export MM_DEFAULT_DURATION=6                # how long will the time be (in seconds)?
+export MM_BINARIES=(soxi shuf bc)           # binaries required
+export MM_MIN_GRAIN_LEN=0.01                # mininum grain length (in seconds)
+export MM_MAX_GRAIN_LEN=0.05                # maximum grain length (in seconds)
+export MM_DENSITY=0.8                       # silence Vs grains. 0.0=silence, 1.0=grain
